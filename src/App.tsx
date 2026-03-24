@@ -24,10 +24,11 @@ const { Title } = Typography;
 
 // Đây là "Bản thiết kế" (Interface) để TypeScript biết 1 công việc trông như thế nào
 interface Task {
-  
+
   id: string;
   name: string;
   isCompleted: boolean;
+  userId?: string; // Thuộc tính này sẽ giúp mình biết công việc nào của ai (Dùng cho tính năng chia sẻ sau này)
 }
 
 // Lớp vỏ bọc giúp một component có thể kéo thả được
@@ -63,23 +64,18 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false); // Chưa đăng nhập thì là false
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-
+  const [userUid, setUserUid] = useState<string | null>(null); // Lưu mã căn cước
   // Hệ thống Auto-Save
   // Hệ thống tự động gọi API 1 lần duy nhất khi vừa mở App
   useEffect(() => {
     // Nhớ THAY ĐƯỜNG LINK CỦA BẠN vào chữ 'LINK_MOCK_API_CỦA_BẠN_Ở_ĐÂY' nhé!
     axios
-      .get(MOCK_API_URL)
+      .get(`${MOCK_API_URL}?userId=${userUid}`)
       .then((response) => {
-        // Lấy dữ liệu thành công thì nhét vào Balo
         setTasks(response.data);
-        message.success("Đã tải dữ liệu từ Server!");
       })
-      .catch((error) => {
-        // Nếu lỗi (đứt mạng, sai link) thì báo lỗi
-        message.error("Lỗi kết nối Server!");
-      });
-  }, []); // Dấu ngoặc vuông rỗng [] nghĩa là "Chỉ chạy 1 lần lúc mới mở App"
+      .catch(() => message.error("Lỗi tải dữ liệu cá nhân!"));
+  }, [userUid]); // Dấu ngoặc vuông rỗng [] nghĩa là "Chỉ chạy 1 lần lúc mới mở App"
   // Hàm Thêm
   // Hàm Thêm (Đã nâng cấp để nói chuyện với Server)
   const handleAddTask = () => {
@@ -89,6 +85,7 @@ function App() {
     const newTaskData = {
       name: inputValue,
       isCompleted: false,
+      userId: userUid, // <-- THÊM DÒNG NÀY: Gắn tên chủ sở hữu vào
     };
 
     // 2. Gọi Shipper mang hàng lên Server (dùng axios.post)
@@ -197,13 +194,14 @@ function App() {
     // onAuthStateChanged sẽ liên tục lắng nghe trạng thái từ Firebase
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // Nếu phát hiện có user đã đăng nhập từ trước -> Cho vào thẳng luôn!
         setIsLoggedIn(true);
         setUsername(user.displayName || "Sếp");
+        setUserUid(user.uid); // <-- THÊM: Lấy mã UID thật của Firebase
       } else {
-        // Nếu không có ai đăng nhập -> Đẩy ra ngoài màn hình Login
         setIsLoggedIn(false);
         setUsername("");
+        setUserUid(null);     // <-- THÊM: Xóa mã UID
+        setTasks([]);         // <-- THÊM: Đổ hết rác trong Balo ra để người sau không thấy
       }
     });
 
@@ -215,7 +213,7 @@ function App() {
   const handleLogin = () => {
     if (username === "admin" && password === "123456") {
       setIsLoggedIn(true);
-      message.success("Đăng nhập thành công! Chào mừng sếp.");
+      setUserUid("admin_fake_uid_123"); // <-- THÊM: Cấp cho admin một cái ID giả
     } else {
       message.error("Sai tài khoản hoặc mật khẩu rồi!");
     }
@@ -227,7 +225,7 @@ function App() {
       .then((result) => {
         setIsLoggedIn(true);
         setUsername(result.user.displayName || "Sếp");
-        message.success(`Đăng nhập thành công! Chào ${result.user.displayName}`);
+        setUserUid(result.user.uid); // <-- THÊM DÒNG NÀY
       })
       .catch((error) => {
         console.error("LỖI FIREBASE:", error);
@@ -236,11 +234,17 @@ function App() {
   };
 
   const handleLogout = () => {
-    signOut(auth).then(() => {
-      setIsLoggedIn(false);
-      setUsername("");
-      message.info("Đã đăng xuất!");
-    });
+    // 1. Dọn dẹp nhà cửa (Áp dụng cho cả Google và Admin)
+    setIsLoggedIn(false);
+    setUsername("");
+    setUserUid(null);     // Xóa thẻ căn cước
+    setTasks([]);         // Đổ sạch rác trong Balo ra
+    message.info("Đã đăng xuất!");
+
+    // 2. Báo cho Firebase biết (nếu trước đó đăng nhập bằng Google)
+    if (auth.currentUser) {
+      signOut(auth);
+    }
   };
 
   // 1. Cảm biến nhận diện kéo thả (Chỉ kích hoạt khi di chuột 5px, để không bị nhầm với lúc bạn click nút Xóa/Sửa)
