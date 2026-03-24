@@ -9,17 +9,42 @@ import {
   Radio,
   message,
 } from "antd";
-import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import { PlusOutlined, DeleteOutlined, EditOutlined, CheckOutlined, LogoutOutlined } from "@ant-design/icons";
 import axios from "axios";
-const MOCK_API_URL = import.meta.env.VITE_MOCK_API_URL; // Đọc biến môi trường từ file .env 
+const MOCK_API_URL = import.meta.env.VITE_MOCK_API_URL; // Đọc biến môi trường từ file .env
+import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
+import { auth, googleProvider } from "./firebase";
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import LoginScreen from "./components/LoginScreen";
+
 const { Title } = Typography;
+
 
 // Đây là "Bản thiết kế" (Interface) để TypeScript biết 1 công việc trông như thế nào
 interface Task {
+  
   id: string;
   name: string;
   isCompleted: boolean;
 }
+
+// Lớp vỏ bọc giúp một component có thể kéo thả được
+const SortableTaskItem = ({ task, children }: { task: Task, children: React.ReactNode }) => {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: task.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      {children}
+    </div>
+  );
+};
 
 function App() {
   // Balo 1: Tự động "Load Game" từ localStorage khi vừa mở web
@@ -28,6 +53,16 @@ function App() {
   const [inputValue, setInputValue] = useState("");
 
   const [filter, setFilter] = useState("all");
+
+  // Nhớ ID của công việc đang được sửa (Nếu null là không sửa gì cả)
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Nhớ nội dung chữ đang được sửa
+  const [editingText, setEditingText] = useState("");
+  // Hệ thống Đăng nhập
+  const [isLoggedIn, setIsLoggedIn] = useState(false); // Chưa đăng nhập thì là false
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
 
   // Hệ thống Auto-Save
   // Hệ thống tự động gọi API 1 lần duy nhất khi vừa mở App
@@ -105,10 +140,7 @@ function App() {
     // 3. Gọi Shipper mang bản sao này lên Server dán đè vào bản cũ (dùng axios.put)
     // Nhớ truyền ID vào cuối đường link để Server biết cần sửa cái nào
     axios
-      .put(
-        `${MOCK_API_URL}/${idToToggle}`,
-        updatedTaskData,
-      )
+      .put(`${MOCK_API_URL}/${idToToggle}`, updatedTaskData)
       .then((response) => {
         // 4. Server báo OK, mình lấy dữ liệu mới từ Server cập nhật lại Balo hiển thị
         const newTasks = tasks.map((task) =>
@@ -121,7 +153,35 @@ function App() {
         message.error("Lưu trạng thái thất bại, thử lại sau!");
       });
   };
+  // 1. Hàm kích hoạt khi bấm nút cây bút (Mở bàn độ súng)
+  const handleStartEdit = (task: Task) => {
+    setEditingId(task.id); // Đánh dấu task này đang được sửa
+    setEditingText(task.name); // Lấy tên cũ bỏ vào ô nhập liệu
+  };
 
+  // 2. Hàm kích hoạt khi gõ xong và bấm Enter (Lưu lên Server)
+  const handleSaveEdit = (idToSave: string) => {
+    if (editingText.trim() === "") return; // Không cho phép sửa thành rỗng
+
+    // Lấy công việc hiện tại và bọc lại với cái tên mới
+    const taskToUpdate = tasks.find((task) => task.id === idToSave);
+    if (!taskToUpdate) return;
+    const updatedTaskData = { ...taskToUpdate, name: editingText };
+
+    // Gọi Shipper mang tên mới lên Server lưu đè (Nhớ dùng chìa khóa bảo mật)
+    axios
+      .put(`${MOCK_API_URL}/${idToSave}`, updatedTaskData)
+      .then((response) => {
+        // Cập nhật lại Balo trên màn hình
+        const newTasks = tasks.map((task) =>
+          task.id === idToSave ? response.data : task,
+        );
+        setTasks(newTasks);
+        setEditingId(null); // Lưu xong thì tắt chế độ sửa
+        message.success("Đã cập nhật tên công việc!");
+      })
+      .catch(() => message.error("Lưu thất bại, thử lại sau!"));
+  };
   const filteredTasks = tasks.filter((task) => {
     if (filter === "completed") {
       return task.isCompleted === true; // Chỉ lấy việc đã xong
@@ -132,11 +192,94 @@ function App() {
     return true; // Nếu filter là 'all' thì lấy hết
   });
 
+  // Hệ thống tự động kiểm tra xem người dùng đã đăng nhập từ lần trước chưa
+  useEffect(() => {
+    // onAuthStateChanged sẽ liên tục lắng nghe trạng thái từ Firebase
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // Nếu phát hiện có user đã đăng nhập từ trước -> Cho vào thẳng luôn!
+        setIsLoggedIn(true);
+        setUsername(user.displayName || "Sếp");
+      } else {
+        // Nếu không có ai đăng nhập -> Đẩy ra ngoài màn hình Login
+        setIsLoggedIn(false);
+        setUsername("");
+      }
+    });
+
+    // Dọn dẹp bộ nhớ khi tắt App
+    return () => unsubscribe();
+  }, []); // [] đảm bảo chỉ gắn camera giám sát 1 lần lúc mới mở web
+
+  // 1. Hàm Đăng nhập truyền thống (Kiểm tra admin / 123456)
+  const handleLogin = () => {
+    if (username === "admin" && password === "123456") {
+      setIsLoggedIn(true);
+      message.success("Đăng nhập thành công! Chào mừng sếp.");
+    } else {
+      message.error("Sai tài khoản hoặc mật khẩu rồi!");
+    }
+  };
+
+  // 2. Hàm Đăng nhập bằng Google (Bật Popup)
+  const handleGoogleLogin = () => {
+    signInWithPopup(auth, googleProvider)
+      .then((result) => {
+        setIsLoggedIn(true);
+        setUsername(result.user.displayName || "Sếp");
+        message.success(`Đăng nhập thành công! Chào ${result.user.displayName}`);
+      })
+      .catch((error) => {
+        console.error("LỖI FIREBASE:", error);
+        message.error("Đăng nhập bằng Google thất bại!");
+      });
+  };
+
+  const handleLogout = () => {
+    signOut(auth).then(() => {
+      setIsLoggedIn(false);
+      setUsername("");
+      message.info("Đã đăng xuất!");
+    });
+  };
+
+  // 1. Cảm biến nhận diện kéo thả (Chỉ kích hoạt khi di chuột 5px, để không bị nhầm với lúc bạn click nút Xóa/Sửa)
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    })
+  );
+
+  // 2. Hàm xử lý khi bạn thả chuột ra
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    // Nếu vị trí thả khác vị trí ban đầu
+    if (over && active.id !== over.id) {
+      setTasks((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        // Đảo vị trí 2 phần tử trong Balo
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
+
   return (
+
     <div style={{ padding: "50px", maxWidth: "600px", margin: "0 auto" }}>
-      <Card style={{ border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
-        <Title level={3} style={{ textAlign: "center" }}>
-          ✅ Todo App Của Tôi
+
+      {!isLoggedIn ? (/* NẾU FALSE: HIỆN FORM ĐĂNG NHẬP */
+        <LoginScreen
+          username={username}
+          setUsername={setUsername}
+          password={password}
+          setPassword={setPassword}
+          onLogin={handleLogin}
+          onGoogleLogin={handleGoogleLogin}
+        />
+      ) : (<Card style={{ border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+        <Title level={3} style={{ textAlign: "center" }} >
+          ✅ Todo App Của {username}
         </Title>
 
         <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
@@ -155,6 +298,14 @@ function App() {
           >
             Thêm
           </Button>
+          <Button
+            type="primary"
+            icon={<LogoutOutlined />}
+            size="large"
+            onClick={handleLogout}
+          >
+            Thoát
+          </Button>
         </div>
         <Radio.Group
           value={filter}
@@ -169,40 +320,70 @@ function App() {
           <Radio.Button value="incomplete">Đang làm</Radio.Button>
           <Radio.Button value="completed">Đã xong</Radio.Button>
         </Radio.Group>
-        <List
-          bordered
-          dataSource={filteredTasks}
-          renderItem={(task) => (
-            <List.Item
-              // Vẫn giữ nút Xóa, nhưng truyền id vào thay vì index
-              actions={[
-                <Button
-                  danger
-                  icon={<DeleteOutlined />}
-                  type="text"
-                  onClick={() => handleDeleteTask(task.id)}
-                />,
-              ]}
-            >
-              {/* Thêm Checkbox để tích chọn */}
-              <Checkbox
-                checked={task.isCompleted}
-                onChange={() => handleToggleTask(task.id)}
-              >
-                {/* Nếu isCompleted là true, thêm hiệu ứng gạch ngang chữ */}
-                <span
-                  style={{
-                    textDecoration: task.isCompleted ? "line-through" : "none",
-                    color: task.isCompleted ? "gray" : "black",
-                  }}
-                >
-                  {task.name}
-                </span>
-              </Checkbox>
-            </List.Item>
-          )}
-        />
-      </Card>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={filteredTasks} strategy={verticalListSortingStrategy}>
+            <List
+              bordered
+              dataSource={filteredTasks}
+              renderItem={(task) => (
+                <SortableTaskItem key={task.id} task={task}>
+                  <List.Item
+                    // Vẫn giữ nút Xóa, nhưng truyền id vào thay vì index
+                    actions={[
+                      <Button
+                        icon={<EditOutlined />}
+                        type="text"
+                        onClick={() => handleStartEdit(task)}
+                      />,
+                      <Button
+                        danger
+                        icon={<DeleteOutlined />}
+                        type="text"
+                        onClick={() => handleDeleteTask(task.id)}
+                      />,
+                      <Button
+                        icon={<CheckOutlined />}
+                        type="text"
+                        onClick={() => handleSaveEdit(task.id)}
+                      />
+                    ]}
+                  >
+                    {/* Thêm Checkbox để tích chọn */}
+                    <Checkbox
+                      checked={task.isCompleted}
+                      onChange={() => handleToggleTask(task.id)}
+                    >
+                      {/* Nếu isCompleted là true, thêm hiệu ứng gạch ngang chữ */}
+                      {editingId === task.id ? (
+                        // Nếu đang ở chế độ sửa: Hiện ô gõ chữ
+                        <Input
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                          onPressEnter={() => handleSaveEdit(task.id)} // Bấm Enter để Lưu
+                          onBlur={() => handleSaveEdit(task.id)} // Click chuột ra ngoài cũng tự Lưu
+                          autoFocus // Tự động trỏ chuột vào luôn
+                        />
+
+                      ) : (
+                        <span
+                          style={{
+                            textDecoration: task.isCompleted
+                              ? "line-through"
+                              : "none",
+                            color: task.isCompleted ? "gray" : "black",
+                          }}
+                        >
+                          {task.name}
+                        </span>
+                      )}
+                    </Checkbox>
+                  </List.Item>
+                </SortableTaskItem>
+              )}
+            />
+          </SortableContext>
+        </DndContext>
+      </Card>)}
     </div>
   );
 }
