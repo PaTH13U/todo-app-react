@@ -27,6 +27,8 @@ export default function App() {
   const [filter, setFilter] = useState("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+  
+
 
   // ==================== CÁC HÀM XỬ LÝ (GIỮ NGUYÊN) ====================
   useEffect(() => {
@@ -72,6 +74,9 @@ export default function App() {
       setTasks((items) => arrayMove(items, items.findIndex(t => t.id === active.id), items.findIndex(t => t.id === over.id)));
     }
   };
+
+  const inProgressCount = tasks.filter(t => t.isCompleted === false).length;
+  const isCompleted = tasks.filter(t => t.isCompleted === true).length;
 // =====================================================================
 // GIAO DIỆN HIỂN THỊ (UI) KẾT HỢP ROUTING
 // =====================================================================
@@ -121,7 +126,13 @@ export default function App() {
                 <Radio.Group value={filter} onChange={(e) => setFilter(e.target.value)} style={{ marginBottom: "20px", display: "flex", justifyContent: "center" }}>
                   <Radio.Button value="all">Tất cả</Radio.Button><Radio.Button value="incomplete">Đang làm</Radio.Button><Radio.Button value="completed">Đã xong</Radio.Button>
                 </Radio.Group>
-
+               <div>
+               Công việc đã hoàn thành: {isCompleted} 
+               </div>
+               <div>
+                Công việc đang làm: {inProgressCount}
+               </div>
+              
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                   <SortableContext items={filteredTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                     {filteredTasks.length === 0 ? (<Empty description="Không có công việc nào ở đây..." />) : (<List bordered dataSource={filteredTasks} renderItem={(task) => (
