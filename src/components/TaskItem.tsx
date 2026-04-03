@@ -1,5 +1,5 @@
 import { Button, Checkbox, Input, List } from "antd";
-import { EditOutlined, DeleteOutlined, CheckOutlined } from "@ant-design/icons";
+import { EditOutlined, DeleteFilled, CheckCircleOutlined } from "@ant-design/icons";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -43,8 +43,8 @@ export default function TaskItem({
       <List.Item
         actions={[
           <Button icon={<EditOutlined />} type="text" onClick={() => onStartEdit(task)} />,
-          <Button danger icon={<DeleteOutlined />} type="text" onClick={() => onDelete(task.id)} />,
-          <Button icon={<CheckOutlined />} type="text" onClick={() => onSaveEdit(task.id)} />,
+          <Button danger icon={<DeleteFilled />} type="text" onClick={() => onDelete(task.id)} />,
+          <Button icon={<CheckCircleOutlined />} type="text" onClick={() => onSaveEdit(task.id)} />,
         ]}
       >
         <Checkbox checked={task.isCompleted} onChange={() => onToggle(task.id)}>
@@ -67,6 +67,7 @@ export default function TaskItem({
             </span>
           )}
         </Checkbox>
+        
       </List.Item>
     </div>
   );

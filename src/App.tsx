@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Input, Button, List, Typography, Card, Radio, message, Spin } from "antd";
+import { Input, Button, List, Typography, Card, Radio, message, Spin, Empty } from "antd";
 import { PlusOutlined, LogoutOutlined } from "@ant-design/icons";
 import axios from "axios";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
@@ -124,9 +124,9 @@ export default function App() {
 
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                   <SortableContext items={filteredTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                    <List bordered dataSource={filteredTasks} renderItem={(task) => (
+                    {filteredTasks.length === 0 ? (<Empty description="Không có công việc nào ở đây..." />) : (<List bordered dataSource={filteredTasks} renderItem={(task) => (
                         <TaskItem key={task.id} task={task} editingId={editingId} editingText={editingText} setEditingText={setEditingText} onStartEdit={handleStartEdit} onSaveEdit={handleSaveEdit} onDelete={handleDeleteTask} onToggle={handleToggleTask} />
-                      )} />
+                      )} />)}
                   </SortableContext>
                 </DndContext>
               </Card>

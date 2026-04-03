@@ -87,7 +87,7 @@ const LoginScreen = ({
 
       <div style={{ margin: "10px 0", color: "gray" }}>hoặc</div>
 
-      <Button danger size="large" block onClick={onGoogleLogin}>
+      <Button color="danger" variant="solid" size="large" block onClick={onGoogleLogin}>
         Đăng nhập bằng Google
       </Button>
     </Card>
