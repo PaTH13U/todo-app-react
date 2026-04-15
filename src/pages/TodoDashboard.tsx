@@ -1,6 +1,6 @@
 
 
-import { Card, Typography, Input, Button, Radio, List, Empty } from "antd";
+import { Card, Typography, Input, Button, Radio, List, Empty, Skeleton } from "antd";
 import { PlusOutlined, LogoutOutlined } from "@ant-design/icons";
 import { DndContext, closestCenter,useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -31,6 +31,9 @@ interface TodoDashboardProps {
   handleDragEnd: (event: DragEndEvent) => void;
   isCompleted: number;
   inProgressCount: number;
+  isFetching: boolean;
+  searchQuery: string;
+  setSearchQuery: (value: string) => void;
 }
 
 
@@ -56,12 +59,16 @@ export default function TodoDashboard(props: TodoDashboardProps) {
     handleDragEnd,
     isCompleted,
     inProgressCount,
+    isFetching,
+    setSearchQuery,
+    searchQuery,
     // ... lấy thêm đồ ở đây ...
   } = props;
 
   // 4. DÁN CỤC <Card> TỪ APP.TSX VÀO ĐÂY
   return (
-    <Card style={{ border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+    <Skeleton active loading={isFetching} paragraph={{ rows: 8 }}>
+       <Card style={{ border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
       <Title level={3} style={{ textAlign: "center" }}>✅ Todo App Của {loggedInName}</Title>
 
       <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
@@ -72,7 +79,9 @@ export default function TodoDashboard(props: TodoDashboardProps) {
 
       <Radio.Group value={filter} onChange={(e) => setFilter(e.target.value)} style={{ marginBottom: "20px", display: "flex", justifyContent: "center" }}>
         <Radio.Button value="all">Tất cả</Radio.Button><Radio.Button value="incomplete">Đang làm</Radio.Button><Radio.Button value="completed">Đã xong</Radio.Button>
+      
       </Radio.Group>
+      <Input.Search placeholder="Tìm kiếm công việc..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
       <div>
         <Title level={4}>Thống kê</Title>
         Công việc đã hoàn thành: {isCompleted}
@@ -90,5 +99,6 @@ export default function TodoDashboard(props: TodoDashboardProps) {
         </SortableContext>
       </DndContext>
     </Card>
+    </Skeleton>
   );
 }
